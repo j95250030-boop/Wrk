@@ -1,0 +1,100 @@
+name: main
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    env:
+      REPO_OWNER: "j95250030-boop"
+      BOT_REPO_NAME: "Bhh"
+
+    steps:
+      - name: Step 1 - Environment Setup
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3 python3-pip python3-venv git -qq
+          echo "Step 1 complete"
+
+      - name: Step 2 - Clone Repo & Setup Bot
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          mkdir -p /home/runner/bots
+
+          # Clone repo
+          git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" /home/runner/bots/bot1
+
+          # Create .env file
+          cat > /home/runner/bots/bot1/.env << ENVEOF
+          BOT_TOKEN=${BOT_TOKEN}
+          ENVEOF
+
+          # Setup virtual environment
+          python3 -m venv /home/runner/bots/v1
+          /home/runner/bots/v1/bin/pip install -q -r /home/runner/bots/bot1/requirements.txt
+
+          # Create start script
+          cat > /home/runner/bots/s1.sh << 'SCRIPT'
+          #!/bin/bash
+          cd /home/runner/bots/bot1
+          export $(cat .env | xargs)
+          /home/runner/bots/v1/bin/python -u main.py
+          SCRIPT
+
+          chmod +x /home/runner/bots/s1.sh
+          echo "Step 2 complete"
+
+      - name: Step 3 - Run Bot with Auto Restart
+        run: |
+          # Start bot
+          nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
+          sleep 15
+          echo "Bot started!"
+
+          # Auto restart loop — 325 minutes
+          END_TIME=$(( $(date +%s) + 325*60 ))
+
+          while [ $(date +%s) -lt $END_TIME ]; do
+            sleep 60
+
+            COUNT=$(pgrep -c python3 || echo 0)
+            echo "$(date) - Bot status: $COUNT running"
+
+            if [ "$COUNT" -lt 1 ]; then
+              echo "$(date) - Bot crashed! Restarting..."
+              pkill -f "main.py" || true
+              sleep 5
+              nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
+              sleep 15
+              echo "$(date) - Bot restarted!"
+            fi
+          done
+
+          echo "Step 3 complete"
+
+      - name: Cleanup - Auto Retrigger
+        if: always()
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token ${PAT_TOKEN}" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/zbdhhs.yml/dispatches" \
+              -d '{"ref":"main"}')
+
+            echo "Trigger attempt $i: HTTP $STATUS"
+
+            if [ "$STATUS" = "204" ]; then
+              echo "Next run triggered!"
+              break
+            fi
+            sleep 10
+          done
