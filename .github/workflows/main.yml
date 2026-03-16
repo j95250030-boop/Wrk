@@ -6,7 +6,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 300
 
     env:
       REPO_OWNER: "j95250030-boop"
@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p /home/runner/bots
 
-          # ── Bot 1 ──
+          # Bot 1
           git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" /home/runner/bots/bot1
 
           printf "BOT_TOKEN=%s\n" "${BOT_TOKEN}" > /home/runner/bots/bot1/.env
@@ -46,7 +46,7 @@ exec /home/runner/bots/v1/bin/python -u main.py
 SCRIPT
           chmod +x /home/runner/bots/s1.sh
 
-          # ── Bot 2 ──
+          # Bot 2
           git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT2_REPO_NAME}.git" /home/runner/bots/bot2
 
           printf "BOT_TOKEN=%s\n" "${BOT2_TOKEN}" > /home/runner/bots/bot2/.env
@@ -80,12 +80,12 @@ SCRIPT
           echo "Bot1 PID: $(cat /home/runner/bots/bot1.pid)"
           echo "Bot2 PID: $(cat /home/runner/bots/bot2.pid)"
 
-          END_TIME=$(( $(date +%s) + 325*60 ))
+          END_TIME=$(( $(date +%s) + 295*60 ))
 
           while [ $(date +%s) -lt $END_TIME ]; do
             sleep 60
 
-            BOT1_PID=$(cat /home/runner/bots/bot1.pid 2>/dev/null)
+            BOT1_PID=$(cat /home/runner/bots/bot1.pid 2>/dev/null || echo "")
             if [ -n "$BOT1_PID" ] && ! kill -0 "$BOT1_PID" 2>/dev/null; then
               echo "$(date) - Bot1 crashed! Last 5 lines:"
               tail -5 /home/runner/bots/bot1.log
@@ -98,7 +98,7 @@ SCRIPT
               echo "$(date) - Bot1 OK (PID: $BOT1_PID)"
             fi
 
-            BOT2_PID=$(cat /home/runner/bots/bot2.pid 2>/dev/null)
+            BOT2_PID=$(cat /home/runner/bots/bot2.pid 2>/dev/null || echo "")
             if [ -n "$BOT2_PID" ] && ! kill -0 "$BOT2_PID" 2>/dev/null; then
               echo "$(date) - Bot2 crashed! Last 5 lines:"
               tail -5 /home/runner/bots/bot2.log
@@ -110,7 +110,6 @@ SCRIPT
             else
               echo "$(date) - Bot2 OK (PID: $BOT2_PID)"
             fi
-
           done
 
           echo "Step 3 complete"
@@ -125,7 +124,7 @@ SCRIPT
               -X POST \
               -H "Accept: application/vnd.github.v3+json" \
               -H "Authorization: token ${PAT_TOKEN}" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/zbdhhs.yml/dispatches" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
               -d '{"ref":"main"}')
 
             echo "Trigger attempt $i: HTTP $STATUS"
