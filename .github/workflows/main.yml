@@ -31,37 +31,37 @@ jobs:
           # ── Bot 1 ──
           git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" /home/runner/bots/bot1
 
-          cat > /home/runner/bots/bot1/.env << ENVEOF
-          BOT_TOKEN=${BOT_TOKEN}
-          ENVEOF
+          printf "BOT_TOKEN=%s\n" "${BOT_TOKEN}" > /home/runner/bots/bot1/.env
 
           python3 -m venv /home/runner/bots/v1
           /home/runner/bots/v1/bin/pip install -q -r /home/runner/bots/bot1/requirements.txt
 
           cat > /home/runner/bots/s1.sh << 'SCRIPT'
-          #!/bin/bash
-          cd /home/runner/bots/bot1
-          export $(cat .env | xargs)
-          /home/runner/bots/v1/bin/python -u main.py
-          SCRIPT
+#!/bin/bash
+cd /home/runner/bots/bot1
+set -a
+source .env
+set +a
+exec /home/runner/bots/v1/bin/python -u main.py
+SCRIPT
           chmod +x /home/runner/bots/s1.sh
 
           # ── Bot 2 ──
           git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT2_REPO_NAME}.git" /home/runner/bots/bot2
 
-          cat > /home/runner/bots/bot2/.env << ENVEOF
-          BOT_TOKEN=${BOT2_TOKEN}
-          ENVEOF
+          printf "BOT_TOKEN=%s\n" "${BOT2_TOKEN}" > /home/runner/bots/bot2/.env
 
           python3 -m venv /home/runner/bots/v2
           /home/runner/bots/v2/bin/pip install -q -r /home/runner/bots/bot2/requirements.txt
 
           cat > /home/runner/bots/s2.sh << 'SCRIPT'
-          #!/bin/bash
-          cd /home/runner/bots/bot2
-          export $(cat .env | xargs)
-          /home/runner/bots/v2/bin/python -u main.py
-          SCRIPT
+#!/bin/bash
+cd /home/runner/bots/bot2
+set -a
+source .env
+set +a
+exec /home/runner/bots/v2/bin/python -u main.py
+SCRIPT
           chmod +x /home/runner/bots/s2.sh
 
           echo "Step 2 complete"
@@ -69,36 +69,48 @@ jobs:
       - name: Step 3 - Run Both Bots with Auto Restart
         run: |
           nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
+          echo $! > /home/runner/bots/bot1.pid
           sleep 5
+
           nohup bash /home/runner/bots/s2.sh > /home/runner/bots/bot2.log 2>&1 &
+          echo $! > /home/runner/bots/bot2.pid
           sleep 15
+
           echo "Both bots started!"
+          echo "Bot1 PID: $(cat /home/runner/bots/bot1.pid)"
+          echo "Bot2 PID: $(cat /home/runner/bots/bot2.pid)"
 
           END_TIME=$(( $(date +%s) + 325*60 ))
 
           while [ $(date +%s) -lt $END_TIME ]; do
             sleep 60
 
-            COUNT=$(pgrep -c python3 || echo 0)
-            echo "$(date) - Running python3 processes: $COUNT"
-
-            if ! pgrep -f "bot1/main.py" > /dev/null; then
-              echo "$(date) - Bot1 crashed! Restarting..."
-              pkill -f "bot1/main.py" || true
-              sleep 3
+            BOT1_PID=$(cat /home/runner/bots/bot1.pid 2>/dev/null)
+            if [ -n "$BOT1_PID" ] && ! kill -0 "$BOT1_PID" 2>/dev/null; then
+              echo "$(date) - Bot1 crashed! Last 5 lines:"
+              tail -5 /home/runner/bots/bot1.log
+              echo "$(date) - Restarting Bot1..."
               nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
+              echo $! > /home/runner/bots/bot1.pid
               sleep 10
-              echo "$(date) - Bot1 restarted!"
+              echo "$(date) - Bot1 restarted! New PID: $(cat /home/runner/bots/bot1.pid)"
+            else
+              echo "$(date) - Bot1 OK (PID: $BOT1_PID)"
             fi
 
-            if ! pgrep -f "bot2/main.py" > /dev/null; then
-              echo "$(date) - Bot2 crashed! Restarting..."
-              pkill -f "bot2/main.py" || true
-              sleep 3
+            BOT2_PID=$(cat /home/runner/bots/bot2.pid 2>/dev/null)
+            if [ -n "$BOT2_PID" ] && ! kill -0 "$BOT2_PID" 2>/dev/null; then
+              echo "$(date) - Bot2 crashed! Last 5 lines:"
+              tail -5 /home/runner/bots/bot2.log
+              echo "$(date) - Restarting Bot2..."
               nohup bash /home/runner/bots/s2.sh > /home/runner/bots/bot2.log 2>&1 &
+              echo $! > /home/runner/bots/bot2.pid
               sleep 10
-              echo "$(date) - Bot2 restarted!"
+              echo "$(date) - Bot2 restarted! New PID: $(cat /home/runner/bots/bot2.pid)"
+            else
+              echo "$(date) - Bot2 OK (PID: $BOT2_PID)"
             fi
+
           done
 
           echo "Step 3 complete"
