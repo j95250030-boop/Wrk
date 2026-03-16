@@ -11,6 +11,7 @@ jobs:
     env:
       REPO_OWNER: "j95250030-boop"
       BOT_REPO_NAME: "Bhh"
+      BOT2_REPO_NAME: "Wbbwb"
 
     steps:
       - name: Step 1 - Environment Setup
@@ -19,59 +20,84 @@ jobs:
           sudo apt-get install -y python3 python3-pip python3-venv git -qq
           echo "Step 1 complete"
 
-      - name: Step 2 - Clone Repo & Setup Bot
+      - name: Step 2 - Clone Repos & Setup Bots
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          BOT2_TOKEN: ${{ secrets.BOT2_TOKEN }}
         run: |
           mkdir -p /home/runner/bots
 
-          # Clone repo
+          # ── Bot 1 ──
           git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" /home/runner/bots/bot1
 
-          # Create .env file
           cat > /home/runner/bots/bot1/.env << ENVEOF
           BOT_TOKEN=${BOT_TOKEN}
           ENVEOF
 
-          # Setup virtual environment
           python3 -m venv /home/runner/bots/v1
           /home/runner/bots/v1/bin/pip install -q -r /home/runner/bots/bot1/requirements.txt
 
-          # Create start script
           cat > /home/runner/bots/s1.sh << 'SCRIPT'
           #!/bin/bash
           cd /home/runner/bots/bot1
           export $(cat .env | xargs)
           /home/runner/bots/v1/bin/python -u main.py
           SCRIPT
-
           chmod +x /home/runner/bots/s1.sh
+
+          # ── Bot 2 ──
+          git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT2_REPO_NAME}.git" /home/runner/bots/bot2
+
+          cat > /home/runner/bots/bot2/.env << ENVEOF
+          BOT_TOKEN=${BOT2_TOKEN}
+          ENVEOF
+
+          python3 -m venv /home/runner/bots/v2
+          /home/runner/bots/v2/bin/pip install -q -r /home/runner/bots/bot2/requirements.txt
+
+          cat > /home/runner/bots/s2.sh << 'SCRIPT'
+          #!/bin/bash
+          cd /home/runner/bots/bot2
+          export $(cat .env | xargs)
+          /home/runner/bots/v2/bin/python -u main.py
+          SCRIPT
+          chmod +x /home/runner/bots/s2.sh
+
           echo "Step 2 complete"
 
-      - name: Step 3 - Run Bot with Auto Restart
+      - name: Step 3 - Run Both Bots with Auto Restart
         run: |
-          # Start bot
           nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
+          sleep 5
+          nohup bash /home/runner/bots/s2.sh > /home/runner/bots/bot2.log 2>&1 &
           sleep 15
-          echo "Bot started!"
+          echo "Both bots started!"
 
-          # Auto restart loop — 325 minutes
           END_TIME=$(( $(date +%s) + 325*60 ))
 
           while [ $(date +%s) -lt $END_TIME ]; do
             sleep 60
 
             COUNT=$(pgrep -c python3 || echo 0)
-            echo "$(date) - Bot status: $COUNT running"
+            echo "$(date) - Running python3 processes: $COUNT"
 
-            if [ "$COUNT" -lt 1 ]; then
-              echo "$(date) - Bot crashed! Restarting..."
-              pkill -f "main.py" || true
-              sleep 5
+            if ! pgrep -f "bot1/main.py" > /dev/null; then
+              echo "$(date) - Bot1 crashed! Restarting..."
+              pkill -f "bot1/main.py" || true
+              sleep 3
               nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
-              sleep 15
-              echo "$(date) - Bot restarted!"
+              sleep 10
+              echo "$(date) - Bot1 restarted!"
+            fi
+
+            if ! pgrep -f "bot2/main.py" > /dev/null; then
+              echo "$(date) - Bot2 crashed! Restarting..."
+              pkill -f "bot2/main.py" || true
+              sleep 3
+              nohup bash /home/runner/bots/s2.sh > /home/runner/bots/bot2.log 2>&1 &
+              sleep 10
+              echo "$(date) - Bot2 restarted!"
             fi
           done
 
