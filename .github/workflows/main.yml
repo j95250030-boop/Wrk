@@ -9,16 +9,16 @@ jobs:
     timeout-minutes: 300
 
     env:
-      REPO_OWNER: "j95250030-boop"
-      BOT_REPO_NAME: "Bhh"
-      BOT2_REPO_NAME: "Wbbwb"
+      REPO_OWNER: j95250030-boop
+      BOT_REPO_NAME: Bhh
+      BOT2_REPO_NAME: Wbbwb
 
     steps:
       - name: Step 1 - Environment Setup
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y python3 python3-pip python3-venv git -qq
-          echo "Step 1 complete"
+          echo "Environment ready"
 
       - name: Step 2 - Clone Repos & Setup Bots
         env:
@@ -28,57 +28,47 @@ jobs:
         run: |
           mkdir -p /home/runner/bots
 
-          # Bot 1
-          git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" /home/runner/bots/bot1
-
+          # Bot1
+          git clone https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git /home/runner/bots/bot1
           printf "BOT_TOKEN=%s\n" "${BOT_TOKEN}" > /home/runner/bots/bot1/.env
 
           python3 -m venv /home/runner/bots/v1
           /home/runner/bots/v1/bin/pip install -q -r /home/runner/bots/bot1/requirements.txt
 
-          cat > /home/runner/bots/s1.sh << 'SCRIPT'
-#!/bin/bash
-cd /home/runner/bots/bot1
-set -a
-source .env
-set +a
-exec /home/runner/bots/v1/bin/python -u main.py
-SCRIPT
+          echo '#!/bin/bash
+          cd /home/runner/bots/bot1
+          set -a
+          source .env
+          set +a
+          exec /home/runner/bots/v1/bin/python -u main.py' > /home/runner/bots/s1.sh
+
           chmod +x /home/runner/bots/s1.sh
 
-          # Bot 2
-          git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT2_REPO_NAME}.git" /home/runner/bots/bot2
-
+          # Bot2
+          git clone https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT2_REPO_NAME}.git /home/runner/bots/bot2
           printf "BOT_TOKEN=%s\n" "${BOT2_TOKEN}" > /home/runner/bots/bot2/.env
 
           python3 -m venv /home/runner/bots/v2
           /home/runner/bots/v2/bin/pip install -q -r /home/runner/bots/bot2/requirements.txt
 
-          cat > /home/runner/bots/s2.sh << 'SCRIPT'
-#!/bin/bash
-cd /home/runner/bots/bot2
-set -a
-source .env
-set +a
-exec /home/runner/bots/v2/bin/python -u main.py
-SCRIPT
+          echo '#!/bin/bash
+          cd /home/runner/bots/bot2
+          set -a
+          source .env
+          set +a
+          exec /home/runner/bots/v2/bin/python -u main.py' > /home/runner/bots/s2.sh
+
           chmod +x /home/runner/bots/s2.sh
 
-          echo "Step 2 complete"
-
-      - name: Step 3 - Run Both Bots with Auto Restart
+      - name: Step 3 - Run Bots with Auto Restart
         run: |
           nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
           echo $! > /home/runner/bots/bot1.pid
+
           sleep 5
 
           nohup bash /home/runner/bots/s2.sh > /home/runner/bots/bot2.log 2>&1 &
           echo $! > /home/runner/bots/bot2.pid
-          sleep 15
-
-          echo "Both bots started!"
-          echo "Bot1 PID: $(cat /home/runner/bots/bot1.pid)"
-          echo "Bot2 PID: $(cat /home/runner/bots/bot2.pid)"
 
           END_TIME=$(( $(date +%s) + 295*60 ))
 
@@ -87,51 +77,26 @@ SCRIPT
 
             BOT1_PID=$(cat /home/runner/bots/bot1.pid 2>/dev/null || echo "")
             if [ -n "$BOT1_PID" ] && ! kill -0 "$BOT1_PID" 2>/dev/null; then
-              echo "$(date) - Bot1 crashed! Last 5 lines:"
-              tail -5 /home/runner/bots/bot1.log
-              echo "$(date) - Restarting Bot1..."
+              echo "Bot1 crashed - restarting"
               nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
               echo $! > /home/runner/bots/bot1.pid
-              sleep 10
-              echo "$(date) - Bot1 restarted! New PID: $(cat /home/runner/bots/bot1.pid)"
-            else
-              echo "$(date) - Bot1 OK (PID: $BOT1_PID)"
             fi
 
             BOT2_PID=$(cat /home/runner/bots/bot2.pid 2>/dev/null || echo "")
             if [ -n "$BOT2_PID" ] && ! kill -0 "$BOT2_PID" 2>/dev/null; then
-              echo "$(date) - Bot2 crashed! Last 5 lines:"
-              tail -5 /home/runner/bots/bot2.log
-              echo "$(date) - Restarting Bot2..."
+              echo "Bot2 crashed - restarting"
               nohup bash /home/runner/bots/s2.sh > /home/runner/bots/bot2.log 2>&1 &
               echo $! > /home/runner/bots/bot2.pid
-              sleep 10
-              echo "$(date) - Bot2 restarted! New PID: $(cat /home/runner/bots/bot2.pid)"
-            else
-              echo "$(date) - Bot2 OK (PID: $BOT2_PID)"
             fi
           done
 
-          echo "Step 3 complete"
-
-      - name: Cleanup - Auto Retrigger
+      - name: Auto Retrigger
         if: always()
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              -X POST \
-              -H "Accept: application/vnd.github.v3+json" \
-              -H "Authorization: token ${PAT_TOKEN}" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
-              -d '{"ref":"main"}')
-
-            echo "Trigger attempt $i: HTTP $STATUS"
-
-            if [ "$STATUS" = "204" ]; then
-              echo "Next run triggered!"
-              break
-            fi
-            sleep 10
-          done
+          curl -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization: token ${PAT_TOKEN}" \
+          https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches \
+          -d '{"ref":"main"}'
