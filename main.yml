@@ -85,15 +85,15 @@ jobs:
  
           # Verify secrets are set
           if [ -z "${BOT_TOKEN}" ]; then
-            echo "ERROR
+            echo "ERROR: BOT_TOKEN secret is not set"
             exit 1
           fi
           if [ -z "${ADMIN_ID}" ]; then
-            echo "ERROR
+            echo "ERROR: ADMIN_ID secret is not set"
             exit 1
           fi
           if [ -z "${CHANNEL_ID}" ]; then
-            echo "ERROR
+            echo "ERROR: CHANNEL_ID secret is not set"
             exit 1
           fi
           echo "--- Bot 1 secrets verified OK ---"
@@ -134,35 +134,35 @@ jobs:
           ls -la /home/runner/bots/bot2/
  
           if [ -z "${BOT2_TOKEN}" ]; then
-            echo "ERROR
+            echo "ERROR: BOT2_TOKEN secret is not set"
             exit 1
           fi
           echo "--- Bot 2 secrets verified OK ---"
- 
+
           cat > /home/runner/bots/bot2/.env << ENVEOF
-BOT_TOKEN=${BOT2_TOKEN}
-ADMIN_ID=${BOT2_ADMIN_ID}
-CHANNEL_ID=${BOT2_CHANNEL_ID}
-ENVEOF
+          BOT_TOKEN=${BOT2_TOKEN}
+          ADMIN_ID=${BOT2_ADMIN_ID}
+          CHANNEL_ID=${BOT2_CHANNEL_ID}
+          ENVEOF
  
           echo "--- Installing Bot 2 dependencies ---"
           python3 -m venv /home/runner/bots/venv2
           /home/runner/bots/venv2/bin/pip install --upgrade pip
           /home/runner/bots/venv2/bin/pip install -r /home/runner/bots/bot2/requirements.txt
           echo "--- Bot 2 dependencies installed ---"
- 
+
           cat > /home/runner/bots/start2.sh << 'SCRIPT'
-#!/bin/bash
-cd /home/runner/bots/bot2
-set -a
-source .env
-set +a
-echo "[BOT2] Starting main.py at $(date)"
-/home/runner/bots/venv2/bin/python -u main.py
-EXIT_CODE=$?
-echo "[BOT2] main.py exited with code $EXIT_CODE at $(date)"
-exit $EXIT_CODE
-SCRIPT
+          #!/bin/bash
+          cd /home/runner/bots/bot2
+          set -a
+          source .env
+          set +a
+          echo "[BOT2] Starting main.py at $(date)"
+          /home/runner/bots/venv2/bin/python -u main.py
+          EXIT_CODE=$?
+          echo "[BOT2] main.py exited with code $EXIT_CODE at $(date)"
+          exit $EXIT_CODE
+          SCRIPT
  
           chmod +x /home/runner/bots/start2.sh
           echo "Bot 2 setup complete"
