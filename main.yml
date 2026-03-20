@@ -1,99 +1,313 @@
-name: main
-
+# ══════════════════════════════════════════════════════════════
+# .github/workflows/run_bot.yml
+#
+# Dono bots ek saath chalate hai:
+#   Bot 1 (Signal Bot) — is repo ka bot.py
+#   Bot 2 (External)   — j95250030-boop/Bhh repo ka main.py
+#
+# GitHub Secrets required (repo → Settings → Secrets → Actions):
+#
+#   BOT_TOKEN        → Signal bot ka token (@BotFather se)
+#   ADMIN_ID         → Signal bot ka admin numeric ID
+#   CHANNEL_ID       → Signal bot ka channel (e.g. @mychannel)
+#   PAT_TOKEN        → GitHub Personal Access Token
+#   BOT2_TOKEN       → Bot 2 ka Telegram token
+#   BOT2_ADMIN_ID    → Bot 2 ka admin numeric ID
+#   BOT2_CHANNEL_ID  → Bot 2 ka channel (e.g. @channel2)
+#
+# Optional:
+#   DB_PATH          → default: signal_bot.db
+# ══════════════════════════════════════════════════════════════
+ 
+k-key">name
+k-pipe
+">: main
+  
+ 
 on:
   workflow_dispatch:
-
+ 
 jobs:
   run-bot:
-    runs-on: ubuntu-latest
-    timeout-minutes: 330
-
+    k-key">runs-on
+k-pipe
+">: ubuntu-latest
+  
+    k-key">timeout-minutes
+k-pipe
+">: 330
+  
+ 
     env:
-      REPO_OWNER: "j95250030-boop"
-      BOT_REPO_NAME: "Bhh"
-
+      k-key">REPO_OWNER
+k-pipe
+">:    "
+j95250030-boop
+"
+  
+      k-key">BOT_REPO_NAME
+k-pipe
+">: "
+Bhh
+"
+  
+ 
     steps:
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 1 — System setup
+      # ════════════════════════════════════════════════════
       - name: Step 1 - Environment Setup
-        run: |
+        k-key">run
+k-pipe
+">: 
+k-pipe
+">|
+  
           sudo apt-get update -qq
           sudo apt-get install -y python3 python3-pip python3-venv git -qq
           echo "Step 1 complete"
-
-      - name: Step 2 - Clone Repo & Setup Bot
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 2 — Checkout Signal Bot (Bot 1 — this repo)
+      # ════════════════════════════════════════════════════
+      - name: Step 2a - Checkout Signal Bot repo
+        k-key">uses
+k-pipe
+">: actions/checkout@v4
+  
+        with:
+          k-key">path
+k-pipe
+">: bot1_src
+  
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 3 — Restore Signal Bot DB cache
+      # ════════════════════════════════════════════════════
+      - name: Step 3 - Restore Signal Bot DB cache
+        k-key">uses
+k-pipe
+">: actions/cache@v4
+  
+        with:
+          k-key">path
+k-pipe
+">: bot1_src/signal_bot.db
+  
+          k-key">key
+k-pipe
+">: signal-bot-db-${{ runner.os }}
+  
+          k-key">restore-keys
+k-pipe
+">: 
+k-pipe
+">|
+  
+            signal-bot-db-
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 4 — Setup Bot 1 (Signal Bot)
+      # ════════════════════════════════════════════════════
+      - name: Step 4 - Setup Signal Bot (Bot 1)
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        run: |
+          k-key">BOT_TOKEN
+k-pipe
+">:  ${{ secrets.BOT_TOKEN }}
+  
+          k-key">ADMIN_ID
+k-pipe
+">:   ${{ secrets.ADMIN_ID }}
+  
+          k-key">CHANNEL_ID
+k-pipe
+">: ${{ secrets.CHANNEL_ID }}
+  
+          k-key">DB_PATH
+k-pipe
+">:    ${{ secrets.DB_PATH || 'signal_bot.db' }}
+  
+        k-key">run
+k-pipe
+">: 
+k-pipe
+">|
+  
           mkdir -p /home/runner/bots
-
-          # Clone repo
-          git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" /home/runner/bots/bot1
-
-          # Create .env file
-          cat > /home/runner/bots/bot1/.env << ENVEOF
-          BOT_TOKEN=${BOT_TOKEN}
-          ENVEOF
-
-          # Setup virtual environment
-          python3 -m venv /home/runner/bots/v1
-          /home/runner/bots/v1/bin/pip install -q -r /home/runner/bots/bot1/requirements.txt
-
-          # Create start script
-          cat > /home/runner/bots/s1.sh << 'SCRIPT'
+ 
+          python3 -m venv /home/runner/bots/venv1
+          /home/runner/bots/venv1/bin/pip install -q --upgrade pip
+          /home/runner/bots/venv1/bin/pip install -q "python-telegram-bot[job-queue]>=21.0"
+ 
+          cat > /home/runner/bots/start1.sh << SCRIPT
           #!/bin/bash
-          cd /home/runner/bots/bot1
-          export $(cat .env | xargs)
-          /home/runner/bots/v1/bin/python -u main.py
+          cd ${GITHUB_WORKSPACE}/bot1_src
+          export BOT_TOKEN="${BOT_TOKEN}"
+          export ADMIN_ID="${ADMIN_ID}"
+          export CHANNEL_ID="${CHANNEL_ID}"
+          export DB_PATH="${DB_PATH}"
+          /home/runner/bots/venv1/bin/python -u bot.py
           SCRIPT
-
-          chmod +x /home/runner/bots/s1.sh
-          echo "Step 2 complete"
-
-      - name: Step 3 - Run Bot with Auto Restart
-        run: |
-          # Start bot
-          nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
+ 
+          chmod +x /home/runner/bots/start1.sh
+          echo "Bot 1 setup complete"
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 5 — Setup Bot 2 (External repo — Bhh/main.py)
+      # ════════════════════════════════════════════════════
+      - name: Step 5 - Setup External Bot (Bot 2)
+        env:
+          k-key">PAT_TOKEN
+k-pipe
+">:       ${{ secrets.PAT_TOKEN }}
+  
+          k-key">BOT2_TOKEN
+k-pipe
+">:      ${{ secrets.BOT2_TOKEN }}
+  
+          k-key">BOT2_ADMIN_ID
+k-pipe
+">:   ${{ secrets.BOT2_ADMIN_ID }}
+  
+          k-key">BOT2_CHANNEL_ID
+k-pipe
+">: ${{ secrets.BOT2_CHANNEL_ID }}
+  
+        k-key">run
+k-pipe
+">: 
+k-pipe
+">|
+  
+          git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" \
+            /home/runner/bots/bot2
+ 
+          cat > /home/runner/bots/bot2/.env << ENVEOF
+          BOT_TOKEN=${BOT2_TOKEN}
+          ADMIN_ID=${BOT2_ADMIN_ID}
+          CHANNEL_ID=${BOT2_CHANNEL_ID}
+          ENVEOF
+ 
+          python3 -m venv /home/runner/bots/venv2
+          /home/runner/bots/venv2/bin/pip install -q --upgrade pip
+          /home/runner/bots/venv2/bin/pip install -q -r /home/runner/bots/bot2/requirements.txt
+ 
+          cat > /home/runner/bots/start2.sh << 'SCRIPT'
+          #!/bin/bash
+          cd /home/runner/bots/bot2
+          export $(cat .env | xargs)
+          /home/runner/bots/venv2/bin/python -u main.py
+          SCRIPT
+ 
+          chmod +x /home/runner/bots/start2.sh
+          echo "Bot 2 setup complete"
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 6 — Start both bots + monitor + auto-restart
+      # ════════════════════════════════════════════════════
+      - name: Step 6 - Run Both Bots with Auto Restart
+        k-key">run
+k-pipe
+">: 
+k-pipe
+">|
+  
+          nohup bash /home/runner/bots/start1.sh > /home/runner/bots/bot1.log 2>&1 &
+          BOT1_PID=$!
+          echo "Bot 1 started (PID: $BOT1_PID)"
+ 
+          sleep 5
+ 
+          nohup bash /home/runner/bots/start2.sh > /home/runner/bots/bot2.log 2>&1 &
+          BOT2_PID=$!
+          echo "Bot 2 started (PID: $BOT2_PID)"
+ 
           sleep 15
-          echo "Bot started!"
-
-          # Auto restart loop — 325 minutes
+          echo "Both bots running!"
+ 
           END_TIME=$(( $(date +%s) + 325*60 ))
-
+ 
           while [ $(date +%s) -lt $END_TIME ]; do
             sleep 60
-
-            COUNT=$(pgrep -c python3 || echo 0)
-            echo "$(date) - Bot status: $COUNT running"
-
-            if [ "$COUNT" -lt 1 ]; then
-              echo "$(date) - Bot crashed! Restarting..."
-              pkill -f "main.py" || true
-              sleep 5
-              nohup bash /home/runner/bots/s1.sh > /home/runner/bots/bot1.log 2>&1 &
-              sleep 15
-              echo "$(date) - Bot restarted!"
+ 
+            if ! kill -0 $BOT1_PID 2>/dev/null; then
+              echo "$(date) - Bot 1 crashed! Restarting..."
+              nohup bash /home/runner/bots/start1.sh >> /home/runner/bots/bot1.log 2>&1 &
+              BOT1_PID=$!
+              sleep 10
+              echo "$(date) - Bot 1 restarted (PID: $BOT1_PID)"
+            else
+              echo "$(date) - Bot 1 OK (PID: $BOT1_PID)"
             fi
+ 
+            if ! kill -0 $BOT2_PID 2>/dev/null; then
+              echo "$(date) - Bot 2 crashed! Restarting..."
+              nohup bash /home/runner/bots/start2.sh >> /home/runner/bots/bot2.log 2>&1 &
+              BOT2_PID=$!
+              sleep 10
+              echo "$(date) - Bot 2 restarted (PID: $BOT2_PID)"
+            else
+              echo "$(date) - Bot 2 OK (PID: $BOT2_PID)"
+            fi
+ 
           done
-
-          echo "Step 3 complete"
-
+ 
+          echo "Step 6 complete — time limit reached"
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 7 — Save Signal Bot DB cache
+      # ════════════════════════════════════════════════════
+      - name: Step 7 - Save Signal Bot DB cache
+        k-key">if
+k-pipe
+">: always()
+  
+        k-key">uses
+k-pipe
+">: actions/cache@v4
+  
+        with:
+          k-key">path
+k-pipe
+">: bot1_src/signal_bot.db
+  
+          k-key">key
+k-pipe
+">: signal-bot-db-${{ runner.os }}
+  
+ 
+      # ════════════════════════════════════════════════════
+      # STEP 8 — Auto retrigger
+      # ════════════════════════════════════════════════════
       - name: Cleanup - Auto Retrigger
-        if: always()
+        k-key">if
+k-pipe
+">: always()
+  
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
+          k-key">PAT_TOKEN
+k-pipe
+">: ${{ secrets.PAT_TOKEN }}
+  
+        k-key">run
+k-pipe
+">: 
+k-pipe
+">|
+  
           for i in 1 2 3; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST \
               -H "Accept: application/vnd.github.v3+json" \
               -H "Authorization: token ${PAT_TOKEN}" \
-              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/zbdhhs.yml/dispatches" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/run_bot.yml/dispatches" \
               -d '{"ref":"main"}')
-
+ 
             echo "Trigger attempt $i: HTTP $STATUS"
-
+ 
             if [ "$STATUS" = "204" ]; then
-              echo "Next run triggered!"
+              echo "Next run triggered successfully!"
               break
             fi
             sleep 10
