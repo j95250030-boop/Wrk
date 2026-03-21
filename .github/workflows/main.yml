@@ -51,7 +51,6 @@ jobs:
           python3 -m venv venv1
           ./venv1/bin/pip install --upgrade pip -q
 
-          # Install dependencies (fix for requests error)
           if [ -f bot1/requirements.txt ]; then
             ./venv1/bin/pip install -r bot1/requirements.txt -q
           else
@@ -68,13 +67,14 @@ jobs:
           chmod +x start1.sh
 
       # -------------------------------
-      # 5. SETUP BOT 2
+      # 5. SETUP BOT 2 (MongoDB Enabled)
       # -------------------------------
       - name: Setup Bot2
         env:
-          BOT2_TOKEN:      ${{ secrets.BOT2_TOKEN }}
-          BOT2_ADMIN_ID:   ${{ secrets.BOT2_ADMIN_ID }}
-          BOT2_CHANNEL_ID: ${{ secrets.BOT2_CHANNEL_ID }}
+          BOT2_TOKEN:        ${{ secrets.BOT2_TOKEN }}
+          BOT2_ADMIN_ID:     ${{ secrets.BOT2_ADMIN_ID }}
+          BOT2_CHANNEL_ID:   ${{ secrets.BOT2_CHANNEL_ID }}
+          BOT2_MONGODB_URI:  ${{ secrets.BOT2_MONGODB_URI }}
         run: |
           python3 -m venv venv2
           ./venv2/bin/pip install --upgrade pip -q
@@ -85,6 +85,7 @@ jobs:
           echo "export BOT_TOKEN=${BOT2_TOKEN}" >> start2.sh
           echo "export ADMIN_ID=${BOT2_ADMIN_ID}" >> start2.sh
           echo "export CHANNEL_ID=${BOT2_CHANNEL_ID}" >> start2.sh
+          echo "export MONGODB_URI=${BOT2_MONGODB_URI}" >> start2.sh
           echo 'echo "[BOT2] Starting..."' >> start2.sh
           echo '../venv2/bin/python -u main.py' >> start2.sh
           chmod +x start2.sh
@@ -114,7 +115,6 @@ jobs:
 
             echo "📊 [$TIME] Checking bots..."
 
-            # Bot1
             if ! kill -0 $PID1 2>/dev/null; then
               echo "⚠️ Bot1 crashed → restarting"
               bash start1.sh >> $LOG1 2>&1 &
@@ -123,7 +123,6 @@ jobs:
               echo "✅ Bot1 running"
             fi
 
-            # Bot2
             if ! kill -0 $PID2 2>/dev/null; then
               echo "⚠️ Bot2 crashed → restarting"
               bash start2.sh >> $LOG2 2>&1 &
@@ -132,7 +131,6 @@ jobs:
               echo "✅ Bot2 running"
             fi
 
-            # Anti-freeze restart
             NOW=$(date +%s)
             if (( NOW % 7200 < 20 )); then
               echo "♻️ Anti-freeze restart"
@@ -140,7 +138,6 @@ jobs:
               kill $PID2 2>/dev/null || true
             fi
 
-            # Safe logs (masked)
             echo "--- BOT1 LOG ---"
             tail -5 $LOG1 | sed 's/[A-Za-z0-9:_-]\{20,\}/***HIDDEN***/g'
 
@@ -175,40 +172,3 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches \
             -d '{"ref":"main"}'
-
----
-
-🔒 SECURITY DESIGN
-
-- Secrets only used as ENV (never printed)
-- Logs auto-masked via "sed"
-- No accidental token exposure
-
----
-
-🎯 FINAL RESULT
-
-✔ Bots will run continuously (~6 hours)
-✔ Auto restart if crash
-✔ Freeze protection enabled
-✔ Clean debugging logs
-
----
-
-⚠️ IMPORTANT
-
-If bot still crashes:
-
-- check "requirements.txt"
-- confirm "ADMIN_ID" is numeric
-- confirm "main.py" exists in repo root
-
----
-
-💡 Next upgrade (optional):
-
-- Telegram alert on crash
-- Webhook deployment (24/7)
-- Database persistence
-
-Just tell me 👍
