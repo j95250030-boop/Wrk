@@ -1,7 +1,3 @@
-# ══════════════════════════════════════════════════════════════
-# .github/workflows/main.yml
-# ══════════════════════════════════════════════════════════════
-
 name: main
 
 on:
@@ -22,16 +18,16 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y python3 python3-pip python3-venv git -qq
-          python3 --version
-          pip3 --version
-          echo "Step 1 complete"
+          echo "✅ Step 1 complete"
 
-      - name: Step 2 - Checkout Signal Bot repo
+      - name: Step 2 - Checkout Signal Bot repo (Bhh)
         uses: actions/checkout@v4
         with:
+          repository: j95250030-boop/Bhh
+          token: ${{ secrets.PAT_TOKEN }}
           path: bot1_src
 
-      - name: Step 3 - Restore Signal Bot DB cache
+      - name: Step 3 - Restore Bot 1 DB cache
         uses: actions/cache@v4
         with:
           path: bot1_src/signal_bot.db
@@ -39,7 +35,7 @@ jobs:
           restore-keys: |
             signal-bot-db-
 
-      - name: Step 4 - Setup Signal Bot (Bot 1)
+      - name: Step 4 - Setup Bot 1 (Signal Bot)
         env:
           BOT_TOKEN:  ${{ secrets.BOT_TOKEN }}
           ADMIN_ID:   ${{ secrets.ADMIN_ID }}
@@ -47,26 +43,13 @@ jobs:
           DB_PATH:    ${{ secrets.DB_PATH || 'signal_bot.db' }}
         run: |
           mkdir -p /home/runner/bots
-
-          echo "--- Installing Bot 1 dependencies ---"
           python3 -m venv /home/runner/bots/venv1
-          /home/runner/bots/venv1/bin/pip install --upgrade pip
-          /home/runner/bots/venv1/bin/pip install "python-telegram-bot[job-queue]>=21.0"
-          echo "--- Bot 1 dependencies installed ---"
+          /home/runner/bots/venv1/bin/pip install --upgrade pip -q
+          /home/runner/bots/venv1/bin/pip install "python-telegram-bot[job-queue]>=21.0" -q
 
-          if [ -z "${BOT_TOKEN}" ]; then
-            echo "ERROR: BOT_TOKEN secret is not set"
-            exit 1
-          fi
-          if [ -z "${ADMIN_ID}" ]; then
-            echo "ERROR: ADMIN_ID secret is not set"
-            exit 1
-          fi
-          if [ -z "${CHANNEL_ID}" ]; then
-            echo "ERROR: CHANNEL_ID secret is not set"
-            exit 1
-          fi
-          echo "--- Bot 1 secrets verified OK ---"
+          [ -z "${BOT_TOKEN}" ]  && echo "ERROR: BOT_TOKEN not set"  && exit 1
+          [ -z "${ADMIN_ID}" ]   && echo "ERROR: ADMIN_ID not set"   && exit 1
+          [ -z "${CHANNEL_ID}" ] && echo "ERROR: CHANNEL_ID not set" && exit 1
 
           {
             echo '#!/bin/bash'
@@ -81,40 +64,32 @@ jobs:
             echo 'echo "[BOT1] main.py exited with code $EXIT_CODE at $(date)"'
             echo 'exit $EXIT_CODE'
           } > /home/runner/bots/start1.sh
-
           chmod +x /home/runner/bots/start1.sh
-          echo "Bot 1 setup complete"
+          echo "✅ Step 4 complete — Bot 1 ready"
 
-      - name: Step 5 - Setup External Bot (Bot 2)
+      - name: Step 5 - Setup Bot 2 (Bqnwne)
         env:
           PAT_TOKEN:       ${{ secrets.PAT_TOKEN }}
           BOT2_TOKEN:      ${{ secrets.BOT2_TOKEN }}
           BOT2_ADMIN_ID:   ${{ secrets.BOT2_ADMIN_ID }}
           BOT2_CHANNEL_ID: ${{ secrets.BOT2_CHANNEL_ID }}
+          BOT2_DB_PATH:    ${{ secrets.BOT2_DB_PATH }}
         run: |
-          echo "--- Cloning Bot 2 repo ---"
           git clone "https://${PAT_TOKEN}@github.com/${REPO_OWNER}/${BOT_REPO_NAME}.git" \
-            /home/runner/bots/bot2
-          echo "--- Bot 2 repo cloned ---"
+            /home/runner/bots/bot2 -q
 
-          echo "--- Bot 2 repo contents ---"
-          ls -la /home/runner/bots/bot2/
+          [ -z "${BOT2_TOKEN}" ] && echo "ERROR: BOT2_TOKEN not set" && exit 1
 
-          if [ -z "${BOT2_TOKEN}" ]; then
-            echo "ERROR: BOT2_TOKEN secret is not set"
-            exit 1
-          fi
-          echo "--- Bot 2 secrets verified OK ---"
+          {
+            echo "BOT_TOKEN=${BOT2_TOKEN}"
+            echo "ADMIN_ID=${BOT2_ADMIN_ID}"
+            echo "CHANNEL_ID=${BOT2_CHANNEL_ID}"
+            echo "DB_PATH=${BOT2_DB_PATH}"
+          } > /home/runner/bots/bot2/.env
 
-          echo "BOT_TOKEN=${BOT2_TOKEN}"        > /home/runner/bots/bot2/.env
-          echo "ADMIN_ID=${BOT2_ADMIN_ID}"     >> /home/runner/bots/bot2/.env
-          echo "CHANNEL_ID=${BOT2_CHANNEL_ID}" >> /home/runner/bots/bot2/.env
-
-          echo "--- Installing Bot 2 dependencies ---"
           python3 -m venv /home/runner/bots/venv2
-          /home/runner/bots/venv2/bin/pip install --upgrade pip
-          /home/runner/bots/venv2/bin/pip install -r /home/runner/bots/bot2/requirements.txt
-          echo "--- Bot 2 dependencies installed ---"
+          /home/runner/bots/venv2/bin/pip install --upgrade pip -q
+          /home/runner/bots/venv2/bin/pip install -r /home/runner/bots/bot2/requirements.txt -q
 
           {
             echo '#!/bin/bash'
@@ -128,135 +103,73 @@ jobs:
             echo 'echo "[BOT2] main.py exited with code $EXIT_CODE at $(date)"'
             echo 'exit $EXIT_CODE'
           } > /home/runner/bots/start2.sh
-
           chmod +x /home/runner/bots/start2.sh
-          echo "Bot 2 setup complete"
+          echo "✅ Step 5 complete — Bot 2 ready"
 
-      - name: Step 6 - Run Both Bots with Live Logs
+      - name: Step 6 - Run Both Bots
         run: |
           LOG1=/home/runner/bots/bot1.log
           LOG2=/home/runner/bots/bot2.log
 
-          echo "========================================"
-          echo "  Starting Bot 1 (Signal Bot)"
-          echo "========================================"
           nohup bash /home/runner/bots/start1.sh > "$LOG1" 2>&1 &
           BOT1_PID=$!
-          echo "[MONITOR] Bot 1 PID: $BOT1_PID"
-
           sleep 5
-
-          echo "========================================"
-          echo "  Starting Bot 2 (Bqnwne)"
-          echo "========================================"
           nohup bash /home/runner/bots/start2.sh > "$LOG2" 2>&1 &
           BOT2_PID=$!
-          echo "[MONITOR] Bot 2 PID: $BOT2_PID"
 
+          echo "✅ Both bots started"
+          echo "   Bot1 PID: $BOT1_PID"
+          echo "   Bot2 PID: $BOT2_PID"
           sleep 20
 
-          echo ""
-          echo "════ BOT 1 STARTUP LOGS ════"
-          cat "$LOG1" 2>/dev/null || echo "(no logs yet)"
-          echo ""
-          echo "════ BOT 2 STARTUP LOGS ════"
-          cat "$LOG2" 2>/dev/null || echo "(no logs yet)"
-          echo ""
-
-          BOT1_LAST=0
-          BOT2_LAST=0
           RESTART1=0
           RESTART2=0
-
           END_TIME=$(( $(date +%s) + 325*60 ))
 
           while [ $(date +%s) -lt $END_TIME ]; do
             sleep 30
-
             TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-
-            BOT1_TOTAL=$(wc -l < "$LOG1" 2>/dev/null || echo 0)
-            if [ "$BOT1_TOTAL" -gt "$BOT1_LAST" ]; then
-              echo "---- [BOT1 LOGS @ $TIMESTAMP] ----"
-              tail -n $(( BOT1_TOTAL - BOT1_LAST )) "$LOG1"
-              BOT1_LAST=$BOT1_TOTAL
-            fi
-
-            BOT2_TOTAL=$(wc -l < "$LOG2" 2>/dev/null || echo 0)
-            if [ "$BOT2_TOTAL" -gt "$BOT2_LAST" ]; then
-              echo "---- [BOT2 LOGS @ $TIMESTAMP] ----"
-              tail -n $(( BOT2_TOTAL - BOT2_LAST )) "$LOG2"
-              BOT2_LAST=$BOT2_TOTAL
-            fi
 
             if ! kill -0 $BOT1_PID 2>/dev/null; then
               RESTART1=$(( RESTART1 + 1 ))
-              echo ""
-              echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-              echo "  [BOT1] CRASHED at $TIMESTAMP"
-              echo "  Restart count: $RESTART1"
-              echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-              tail -30 "$LOG1" 2>/dev/null
-              echo "------------------------------------------"
-              echo "  Restarting Bot 1..."
+              echo "⚠️  [$TIMESTAMP] Bot1 CRASHED — restarting (attempt $RESTART1)"
               nohup bash /home/runner/bots/start1.sh >> "$LOG1" 2>&1 &
               BOT1_PID=$!
               sleep 10
-              echo "  [BOT1] Restarted — new PID: $BOT1_PID"
-              echo ""
-            else
-              echo "[MONITOR $TIMESTAMP] Bot1 OK (PID:$BOT1_PID restarts:$RESTART1) | Bot2 OK (PID:$BOT2_PID restarts:$RESTART2)"
+              echo "✅ [$TIMESTAMP] Bot1 restarted — PID: $BOT1_PID"
             fi
 
             if ! kill -0 $BOT2_PID 2>/dev/null; then
               RESTART2=$(( RESTART2 + 1 ))
-              echo ""
-              echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-              echo "  [BOT2] CRASHED at $TIMESTAMP"
-              echo "  Restart count: $RESTART2"
-              echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-              tail -30 "$LOG2" 2>/dev/null
-              echo "------------------------------------------"
-              echo "  Restarting Bot 2..."
+              echo "⚠️  [$TIMESTAMP] Bot2 CRASHED — restarting (attempt $RESTART2)"
               nohup bash /home/runner/bots/start2.sh >> "$LOG2" 2>&1 &
               BOT2_PID=$!
               sleep 10
-              echo "  [BOT2] Restarted — new PID: $BOT2_PID"
-              echo ""
+              echo "✅ [$TIMESTAMP] Bot2 restarted — PID: $BOT2_PID"
             fi
 
+            echo "[MONITOR $TIMESTAMP] Bot1 ✅ (restarts:$RESTART1) | Bot2 ✅ (restarts:$RESTART2)"
           done
 
-          echo ""
-          echo "========================================"
-          echo "  Time limit reached — Final log dump"
-          echo "========================================"
-          echo "---- FULL BOT 1 LOG ----"
-          cat "$LOG1"
-          echo ""
-          echo "---- FULL BOT 2 LOG ----"
-          cat "$LOG2"
+          echo "⏱️ Time limit reached — shutting down"
 
-      - name: Step 7 - Show Final Logs on Failure
+      - name: Step 7 - Show Crash Logs on Failure
         if: failure()
         run: |
-          echo "========================================"
-          echo "  JOB FAILED — Dumping all logs"
-          echo "========================================"
-          echo "---- BOT 1 FULL LOG ----"
-          cat /home/runner/bots/bot1.log 2>/dev/null || echo "No Bot 1 log found"
-          echo ""
-          echo "---- BOT 2 FULL LOG ----"
-          cat /home/runner/bots/bot2.log 2>/dev/null || echo "No Bot 2 log found"
+          echo "❌ JOB FAILED"
+          echo "---- BOT 1 LAST 30 LINES ----"
+          tail -30 /home/runner/bots/bot1.log 2>/dev/null || echo "No log"
+          echo "---- BOT 2 LAST 30 LINES ----"
+          tail -30 /home/runner/bots/bot2.log 2>/dev/null || echo "No log"
 
-      - name: Step 8 - Save Signal Bot DB cache
+      - name: Step 8 - Save Bot 1 DB cache
         if: always()
         uses: actions/cache@v4
         with:
           path: bot1_src/signal_bot.db
           key: signal-bot-db-${{ runner.os }}
 
-      - name: Cleanup - Auto Retrigger
+      - name: Step 9 - Auto Retrigger
         if: always()
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -268,12 +181,7 @@ jobs:
               -H "Authorization: token ${PAT_TOKEN}" \
               "https://api.github.com/repos/${{ github.repository }}/actions/workflows/main.yml/dispatches" \
               -d '{"ref":"main"}')
-
             echo "Trigger attempt $i: HTTP $STATUS"
-
-            if [ "$STATUS" = "204" ]; then
-              echo "Next run triggered successfully!"
-              break
-            fi
+            [ "$STATUS" = "204" ] && echo "✅ Next run triggered!" && break
             sleep 10
           done
