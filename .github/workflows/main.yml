@@ -20,7 +20,7 @@ jobs:
           echo "✅ Environment ready"
 
       # -------------------------------
-      # 2. CHECKOUT BOT 1 (Bhh)
+      # 2. CHECKOUT BOT 1
       # -------------------------------
       - name: Checkout Bot1 (Bhh)
         uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
           path: bot1
 
       # -------------------------------
-      # 3. CHECKOUT BOT 2 (Bqnwne)
+      # 3. CHECKOUT BOT 2
       # -------------------------------
       - name: Checkout Bot2 (Bqnwne)
         uses: actions/checkout@v4
@@ -50,13 +50,19 @@ jobs:
         run: |
           python3 -m venv venv1
           ./venv1/bin/pip install --upgrade pip -q
-          ./venv1/bin/pip install "python-telegram-bot[job-queue]>=21.0" -q
+
+          # Install dependencies (fix for requests error)
+          if [ -f bot1/requirements.txt ]; then
+            ./venv1/bin/pip install -r bot1/requirements.txt -q
+          else
+            ./venv1/bin/pip install python-telegram-bot requests -q
+          fi
 
           echo '#!/bin/bash' > start1.sh
           echo 'cd bot1' >> start1.sh
-          echo 'export BOT_TOKEN="***"' >> start1.sh
-          echo 'export ADMIN_ID="***"' >> start1.sh
-          echo 'export CHANNEL_ID="***"' >> start1.sh
+          echo "export BOT_TOKEN=${BOT_TOKEN}" >> start1.sh
+          echo "export ADMIN_ID=${ADMIN_ID}" >> start1.sh
+          echo "export CHANNEL_ID=${CHANNEL_ID}" >> start1.sh
           echo 'echo "[BOT1] Starting..."' >> start1.sh
           echo '../venv1/bin/python -u main.py' >> start1.sh
           chmod +x start1.sh
@@ -76,40 +82,39 @@ jobs:
 
           echo '#!/bin/bash' > start2.sh
           echo 'cd bot2' >> start2.sh
-          echo 'export BOT_TOKEN="***"' >> start2.sh
-          echo 'export ADMIN_ID="***"' >> start2.sh
-          echo 'export CHANNEL_ID="***"' >> start2.sh
+          echo "export BOT_TOKEN=${BOT2_TOKEN}" >> start2.sh
+          echo "export ADMIN_ID=${BOT2_ADMIN_ID}" >> start2.sh
+          echo "export CHANNEL_ID=${BOT2_CHANNEL_ID}" >> start2.sh
           echo 'echo "[BOT2] Starting..."' >> start2.sh
           echo '../venv2/bin/python -u main.py' >> start2.sh
           chmod +x start2.sh
 
       # -------------------------------
-      # 6. RUN + MONITOR (CORE LOGIC)
+      # 6. RUN + MONITOR
       # -------------------------------
-      - name: Run Bots with Monitor
+      - name: Run Bots
         run: |
           LOG1=bot1.log
           LOG2=bot2.log
 
-          echo "🚀 Launching Bot1"
+          echo "🚀 Starting Bot1"
           bash start1.sh > $LOG1 2>&1 &
           PID1=$!
 
-          echo "🚀 Launching Bot2"
+          echo "🚀 Starting Bot2"
           bash start2.sh > $LOG2 2>&1 &
           PID2=$!
 
           sleep 15
-
           END=$(( $(date +%s) + 325*60 ))
 
           while [ $(date +%s) -lt $END ]; do
             sleep 20
             TIME=$(date '+%H:%M:%S')
 
-            echo "📊 [$TIME] Status Check"
+            echo "📊 [$TIME] Checking bots..."
 
-            # BOT1 CHECK
+            # Bot1
             if ! kill -0 $PID1 2>/dev/null; then
               echo "⚠️ Bot1 crashed → restarting"
               bash start1.sh >> $LOG1 2>&1 &
@@ -118,7 +123,7 @@ jobs:
               echo "✅ Bot1 running"
             fi
 
-            # BOT2 CHECK
+            # Bot2
             if ! kill -0 $PID2 2>/dev/null; then
               echo "⚠️ Bot2 crashed → restarting"
               bash start2.sh >> $LOG2 2>&1 &
@@ -127,29 +132,29 @@ jobs:
               echo "✅ Bot2 running"
             fi
 
-            # 🔥 ANTI-FREEZE (force restart every ~2 hrs)
+            # Anti-freeze restart
             NOW=$(date +%s)
             if (( NOW % 7200 < 20 )); then
-              echo "♻️ Anti-freeze restart triggered"
+              echo "♻️ Anti-freeze restart"
               kill $PID1 2>/dev/null || true
               kill $PID2 2>/dev/null || true
             fi
 
-            # 📜 SHOW SAFE LOGS (last 5 lines only)
-            echo "---- BOT1 LOG ----"
+            # Safe logs (masked)
+            echo "--- BOT1 LOG ---"
             tail -5 $LOG1 | sed 's/[A-Za-z0-9:_-]\{20,\}/***HIDDEN***/g'
 
-            echo "---- BOT2 LOG ----"
+            echo "--- BOT2 LOG ---"
             tail -5 $LOG2 | sed 's/[A-Za-z0-9:_-]\{20,\}/***HIDDEN***/g'
           done
 
       # -------------------------------
-      # 7. FAILURE LOGS (SANITIZED)
+      # 7. ERROR LOGS
       # -------------------------------
       - name: Show Logs on Failure
         if: failure()
         run: |
-          echo "❌ ERROR OCCURRED"
+          echo "❌ Error detected"
 
           echo "--- BOT1 ---"
           tail -30 bot1.log | sed 's/[A-Za-z0-9:_-]\{20,\}/***HIDDEN***/g'
@@ -158,7 +163,7 @@ jobs:
           tail -30 bot2.log | sed 's/[A-Za-z0-9:_-]\{20,\}/***HIDDEN***/g'
 
       # -------------------------------
-      # 8. AUTO RESTART WORKFLOW
+      # 8. AUTO RE-RUN
       # -------------------------------
       - name: Retrigger Workflow
         if: always()
@@ -173,31 +178,37 @@ jobs:
 
 ---
 
-🔒 SECURITY FEATURES
+🔒 SECURITY DESIGN
 
-- ❌ Tokens NEVER printed
-- 🔐 Logs auto-masked using "sed"
-- 🧼 Only last few lines shown (controlled output)
-
----
-
-📊 WHAT YOU GET
-
-- Stable dual bot execution
-- Auto crash recovery
-- Freeze protection
-- Clean debug logs
-- 6-hour continuous uptime loop
+- Secrets only used as ENV (never printed)
+- Logs auto-masked via "sed"
+- No accidental token exposure
 
 ---
 
-⚠️ FINAL NOTE
+🎯 FINAL RESULT
 
-GitHub Actions = temporary hosting
-👉 For 24/7 uptime → move to VPS later
+✔ Bots will run continuously (~6 hours)
+✔ Auto restart if crash
+✔ Freeze protection enabled
+✔ Clean debugging logs
 
 ---
 
-If you want next level:
-👉 webhook + database persistence + multi-user scaling
-I can design that too.
+⚠️ IMPORTANT
+
+If bot still crashes:
+
+- check "requirements.txt"
+- confirm "ADMIN_ID" is numeric
+- confirm "main.py" exists in repo root
+
+---
+
+💡 Next upgrade (optional):
+
+- Telegram alert on crash
+- Webhook deployment (24/7)
+- Database persistence
+
+Just tell me 👍
