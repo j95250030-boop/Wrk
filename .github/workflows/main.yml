@@ -18,9 +18,6 @@ jobs:
 
     steps:
 
-      # ════════════════════════════════════════════════════
-      # STEP 1 — System setup
-      # ════════════════════════════════════════════════════
       - name: Step 1 - Environment Setup
         run: |
           sudo apt-get update -qq
@@ -29,17 +26,11 @@ jobs:
           pip3 --version
           echo "Step 1 complete"
 
-      # ════════════════════════════════════════════════════
-      # STEP 2 — Checkout Signal Bot (Bot 1 — this repo)
-      # ════════════════════════════════════════════════════
       - name: Step 2 - Checkout Signal Bot repo
         uses: actions/checkout@v4
         with:
           path: bot1_src
 
-      # ════════════════════════════════════════════════════
-      # STEP 3 — Restore Signal Bot DB cache
-      # ════════════════════════════════════════════════════
       - name: Step 3 - Restore Signal Bot DB cache
         uses: actions/cache@v4
         with:
@@ -48,9 +39,6 @@ jobs:
           restore-keys: |
             signal-bot-db-
 
-      # ════════════════════════════════════════════════════
-      # STEP 4 — Setup Bot 1 (Signal Bot)
-      # ════════════════════════════════════════════════════
       - name: Step 4 - Setup Signal Bot (Bot 1)
         env:
           BOT_TOKEN:  ${{ secrets.BOT_TOKEN }}
@@ -87,19 +75,16 @@ jobs:
             echo "export ADMIN_ID=\"${ADMIN_ID}\""
             echo "export CHANNEL_ID=\"${CHANNEL_ID}\""
             echo "export DB_PATH=\"${DB_PATH}\""
-            echo 'echo "[BOT1] Starting bot.py at $(date)"'
-            echo '/home/runner/bots/venv1/bin/python -u bot.py'
+            echo 'echo "[BOT1] Starting main.py at $(date)"'
+            echo '/home/runner/bots/venv1/bin/python -u main.py'
             echo 'EXIT_CODE=$?'
-            echo 'echo "[BOT1] bot.py exited with code $EXIT_CODE at $(date)"'
+            echo 'echo "[BOT1] main.py exited with code $EXIT_CODE at $(date)"'
             echo 'exit $EXIT_CODE'
           } > /home/runner/bots/start1.sh
 
           chmod +x /home/runner/bots/start1.sh
           echo "Bot 1 setup complete"
 
-      # ════════════════════════════════════════════════════
-      # STEP 5 — Setup Bot 2 (j95250030-boop/Bqnwne)
-      # ════════════════════════════════════════════════════
       - name: Step 5 - Setup External Bot (Bot 2)
         env:
           PAT_TOKEN:       ${{ secrets.PAT_TOKEN }}
@@ -121,8 +106,8 @@ jobs:
           fi
           echo "--- Bot 2 secrets verified OK ---"
 
-          echo "BOT_TOKEN=${BOT2_TOKEN}"     > /home/runner/bots/bot2/.env
-          echo "ADMIN_ID=${BOT2_ADMIN_ID}"  >> /home/runner/bots/bot2/.env
+          echo "BOT_TOKEN=${BOT2_TOKEN}"        > /home/runner/bots/bot2/.env
+          echo "ADMIN_ID=${BOT2_ADMIN_ID}"     >> /home/runner/bots/bot2/.env
           echo "CHANNEL_ID=${BOT2_CHANNEL_ID}" >> /home/runner/bots/bot2/.env
 
           echo "--- Installing Bot 2 dependencies ---"
@@ -147,9 +132,6 @@ jobs:
           chmod +x /home/runner/bots/start2.sh
           echo "Bot 2 setup complete"
 
-      # ════════════════════════════════════════════════════
-      # STEP 6 — Start both bots + live logs + auto-restart
-      # ════════════════════════════════════════════════════
       - name: Step 6 - Run Both Bots with Live Logs
         run: |
           LOG1=/home/runner/bots/bot1.log
@@ -255,9 +237,6 @@ jobs:
           echo "---- FULL BOT 2 LOG ----"
           cat "$LOG2"
 
-      # ════════════════════════════════════════════════════
-      # STEP 7 — Print crash logs if job fails
-      # ════════════════════════════════════════════════════
       - name: Step 7 - Show Final Logs on Failure
         if: failure()
         run: |
@@ -270,9 +249,6 @@ jobs:
           echo "---- BOT 2 FULL LOG ----"
           cat /home/runner/bots/bot2.log 2>/dev/null || echo "No Bot 2 log found"
 
-      # ════════════════════════════════════════════════════
-      # STEP 8 — Save Signal Bot DB cache
-      # ════════════════════════════════════════════════════
       - name: Step 8 - Save Signal Bot DB cache
         if: always()
         uses: actions/cache@v4
@@ -280,9 +256,6 @@ jobs:
           path: bot1_src/signal_bot.db
           key: signal-bot-db-${{ runner.os }}
 
-      # ════════════════════════════════════════════════════
-      # STEP 9 — Auto retrigger
-      # ════════════════════════════════════════════════════
       - name: Cleanup - Auto Retrigger
         if: always()
         env:
