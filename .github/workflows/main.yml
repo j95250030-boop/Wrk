@@ -67,7 +67,7 @@ jobs:
           chmod +x start1.sh
 
       # -------------------------------
-      # 5. SETUP BOT 2 (MongoDB Enabled)
+      # 5. SETUP BOT 2 (FIXED)
       # -------------------------------
       - name: Setup Bot2
         env:
@@ -85,7 +85,7 @@ jobs:
           echo "export BOT_TOKEN=${BOT2_TOKEN}" >> start2.sh
           echo "export ADMIN_ID=${BOT2_ADMIN_ID}" >> start2.sh
           echo "export CHANNEL_ID=${BOT2_CHANNEL_ID}" >> start2.sh
-          echo "export MONGODB_URI=${BOT2_MONGODB_URI}" >> start2.sh
+          echo "export BOT2_MONGODB_URI=${BOT2_MONGODB_URI}" >> start2.sh   # ✅ FIXED
           echo 'echo "[BOT2] Starting..."' >> start2.sh
           echo '../venv2/bin/python -u main.py' >> start2.sh
           chmod +x start2.sh
